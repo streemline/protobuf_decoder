@@ -11,30 +11,28 @@ def GetDynamicWireFormat(data, start, end):
     wire_type = ord(data[start]) & 0x7
     firstByte = ord(data[start])
     if (firstByte & 0x80) == 0:
-        field_number = (firstByte >> 3)
-        return (start+1, wire_type, field_number)
-    else:
-        byteList = []
-        pos = 0
-        while True:
-            if start+pos >= end:
-                return (None, None, None)
-            oneByte = ord(data[start+pos])
-            byteList.append(oneByte & 0x7F)
-            pos = pos + 1
-            if oneByte & 0x80 == 0x0:
-                break;
+        return start+1, wire_type, (firstByte >> 3)
+    byteList = []
+    pos = 0
+    while True:
+        if start+pos >= end:
+            return (None, None, None)
+        oneByte = ord(data[start+pos])
+        byteList.append(oneByte & 0x7F)
+        pos = pos + 1
+        if oneByte & 0x80 == 0x0:
+            break;
 
-        newStart = start + pos
+    newStart = start + pos
 
-        index = len(byteList) - 1
-        field_number = 0
-        while index >= 0:
-            field_number = (field_number << 0x7) + byteList[index]
-            index = index - 1
+    index = len(byteList) - 1
+    field_number = 0
+    while index >= 0:
+        field_number = (field_number << 0x7) + byteList[index]
+        index = index - 1
 
-        field_number = (field_number >> 3)
-        return (newStart, wire_type, field_number)
+    field_number = (field_number >> 3)
+    return (newStart, wire_type, field_number)
 
 
 
@@ -75,7 +73,7 @@ def ParseData(data, start, end, messages, depth = 0):
     ordinary = 0
     while start < end:
         (start, wire_type, field_number) = GetDynamicWireFormat(data, start, end)
-        if start == None:
+        if start is None:
             return False
 
         if wire_type == 0x00:#Varint
@@ -92,15 +90,12 @@ def ParseData(data, start, end, messages, depth = 0):
 
         elif wire_type == 0x01:#64-bit
             num = 0
-            pos = 7
-            while pos >= 0:
+            for pos in range(7, -1, -1):
                 #if start+1+pos >= end:
                 if start+pos >= end:
                     return False
                 #num = (num << 8) + ord(data[start+1+pos])
                 num = (num << 8) + ord(data[start+pos])
-                pos = pos - 1
-
             #start = start + 9
             start = start + 8
             try:
@@ -108,20 +103,20 @@ def ParseData(data, start, end, messages, depth = 0):
                 floatNum = floatNum[0]
             except:
                 floatNum = None
-                
+
             if depth != 0:
                 strings.append('\t'*depth)
-            if floatNum != None:
-                strings.append("(%d) 64-bit: 0x%x / %f\n" % (field_number, num, floatNum))
-                messages['%02d:%02d:64-bit' % (field_number,ordinary)] = floatNum
-            else:
+            if floatNum is None:
                 strings.append("(%d) 64-bit: 0x%x\n" % (field_number, num))
                 messages['%02d:%02d:64-bit' % (field_number,ordinary)] = num
 
 
+            else:
+                strings.append("(%d) 64-bit: 0x%x / %f\n" % (field_number, num, floatNum))
+                messages['%02d:%02d:64-bit' % (field_number,ordinary)] = floatNum
             ordinary = ordinary + 1
 
-            
+
         elif wire_type == 0x02:#Length-delimited
             curStrIndex = len(strings)
             #(stringLen, start, success) = RetrieveInt(data, start+1, end)
@@ -175,16 +170,13 @@ def ParseData(data, start, end, messages, depth = 0):
 
         elif wire_type == 0x05:#32-bit
             num = 0
-            pos = 3
-            while pos >= 0:
+            for pos in range(3, -1, -1):
 
                 #if start+1+pos >= end:
                 if start+pos >= end:
                     return False
                 #num = (num << 8) + ord(data[start+1+pos])
                 num = (num << 8) + ord(data[start+pos])
-                pos = pos - 1
-
             #start = start + 5
             start = start + 4
             try:
@@ -193,7 +185,7 @@ def ParseData(data, start, end, messages, depth = 0):
             except:
                 floatNum = None
 
-                
+
             if depth != 0:
                 strings.append('\t'*depth)
             if floatNum != None:
@@ -266,7 +258,7 @@ def WriteVarint(field_number, value, output):
         byteWritten += 1
         if value == 0:
             break
-    
+
     return byteWritten
 
 def Write64bitFloat(field_number, value, output):
@@ -275,7 +267,7 @@ def Write64bitFloat(field_number, value, output):
     #output.append(wireFormat)
     #byteWritten += 1
     byteWritten += WriteValue(wireFormat, output)
-    
+
     bytesStr = struct.pack('d', value).encode('hex')
     n = 2
     bytesList = [bytesStr[i:i+n] for i in range(0, len(bytesStr), n)]
@@ -284,8 +276,8 @@ def Write64bitFloat(field_number, value, output):
     #    output.append(int(bytesList[i],16))
     #    byteWritten += 1
     #    i -= 1
-    for i in range(0,len(bytesList)):
-        output.append(int(bytesList[i],16))
+    for item in bytesList:
+        output.append(int(item, 16))
         byteWritten += 1
 
     return byteWritten
@@ -296,8 +288,8 @@ def Write64bit(field_number, value, output):
     byteWritten += WriteValue(wireFormat, output)
     #output.append(wireFormat)
     #byteWritten += 1
-    
-    for i in range(0,8):
+
+    for _ in range(8):
         output.append(value & 0xFF)
         value = (value >> 8)
         byteWritten += 1
@@ -310,7 +302,7 @@ def Write32bitFloat(field_number, value, output):
     #output.append(wireFormat)
     #byteWritten += 1
     byteWritten += WriteValue(wireFormat, output)
-    
+
     bytesStr = struct.pack('f', value).encode('hex')
     n = 2
     bytesList = [bytesStr[i:i+n] for i in range(0, len(bytesStr), n)]
@@ -319,8 +311,8 @@ def Write32bitFloat(field_number, value, output):
     #    output.append(int(bytesList[i],16))
     #    byteWritten += 1
     #    i -= 1
-    for i in range(0,len(bytesList)):
-        output.append(int(bytesList[i],16))
+    for item in bytesList:
+        output.append(int(item, 16))
         byteWritten += 1
 
 
@@ -332,8 +324,8 @@ def Write32bit(field_number, value, output):
     #output.append(wireFormat)
     #byteWritten += 1
     byteWritten += WriteValue(wireFormat, output)
-    
-    for i in range(0,4):
+
+    for _ in range(4):
         output.append(value & 0xFF)
         value = (value >> 8)
         byteWritten += 1
@@ -341,20 +333,14 @@ def Write32bit(field_number, value, output):
     return byteWritten
 
 def WriteRepeatedField(message, output):
-    byteWritten = 0
-    for v in message:
-        byteWritten += WriteValue(v, output)
-    return byteWritten
+    return sum(WriteValue(v, output) for v in message)
 
 
 def Decode(binary):
     messages = {}
     ret = ParseData(binary, 0, len(binary), messages)
 
-    if ret == False:
-        return False
-
-    return messages
+    return False if ret == False else messages
 
 
 def ReEncode(messages, output):
@@ -366,26 +352,41 @@ def ReEncode(messages, output):
         wire_type = keyList[2]
         value = messages[key]
 
-        if wire_type == 'Varint':
-            byteWritten += WriteVarint(field_number, value, output)
-        elif wire_type == '32-bit':
-            if type(value) == type(float(1.0)):
-                byteWritten += Write32bitFloat(field_number, value, output)
-            else:
-                byteWritten += Write32bit(field_number, value, output)
+        if wire_type == '32-bit':
+            byteWritten += (
+                Write32bitFloat(field_number, value, output)
+                if type(value) == type(1.0)
+                else Write32bit(field_number, value, output)
+            )
+
         elif wire_type == '64-bit':
-            if type(value) == type(float(1.0)):
-                byteWritten += Write64bitFloat(field_number, value, output)
-            else:
-                byteWritten += Write64bit(field_number, value, output)
+            byteWritten += (
+                Write64bitFloat(field_number, value, output)
+                if type(value) == type(1.0)
+                else Write64bit(field_number, value, output)
+            )
+
+        elif wire_type == 'Varint':
+            byteWritten += WriteVarint(field_number, value, output)
+        elif wire_type == 'bytes':
+            wireFormat = (field_number << 3) | 0x02
+            byteWritten += WriteValue(wireFormat, output)
+
+            bytesStr = [int(byte,16) for byte in messages[key].split(':')]
+            byteWritten += WriteValue(len(bytesStr),output)
+
+            output.extend(bytesStr)
+            byteWritten += len(bytesStr)
+
+
         elif wire_type == 'embedded message':
-            wireFormat = (field_number << 3) | 0x02 
+            wireFormat = (field_number << 3) | 0x02
             byteWritten += WriteValue(wireFormat, output)
             index = len(output)
             tmpByteWritten = ReEncode(messages[key], output)
             valueList = GenValueList(tmpByteWritten)
             listLen = len(valueList)
-            for i in range(0,listLen):
+            for i in range(listLen):
                 output.insert(index, valueList[i])
                 index += 1
             #output[index] = tmpByteWritten
@@ -398,14 +399,14 @@ def ReEncode(messages, output):
             tmpByteWritten = WriteRepeatedField(messages[key], output)
             valueList = GenValueList(tmpByteWritten)
             listLen = len(valueList)
-            for i in range(0,listLen):
+            for i in range(listLen):
                 output.insert(index, valueList[i])
                 index += 1
             #output[index] = tmpByteWritten
             #print "output:", output
             byteWritten += tmpByteWritten + listLen
         elif wire_type == 'string':
-            wireFormat = (field_number << 3) | 0x02 
+            wireFormat = (field_number << 3) | 0x02
             byteWritten += WriteValue(wireFormat, output)
 
             bytesStr = [int(elem.encode("hex"),16) for elem in messages[key].encode('utf-8')]
@@ -414,26 +415,14 @@ def ReEncode(messages, output):
 
             output.extend(bytesStr)
             byteWritten += len(bytesStr)
-        elif wire_type == 'bytes':
-            wireFormat = (field_number << 3) | 0x02 
-            byteWritten += WriteValue(wireFormat, output)
-
-            bytesStr = [int(byte,16) for byte in messages[key].split(':')]
-            byteWritten += WriteValue(len(bytesStr),output)
-
-            output.extend(bytesStr)
-            byteWritten += len(bytesStr)
-            
-
     return byteWritten
     
 
 def SaveModification(messages, fileName):
-    output = list()
+    output = []
     ReEncode(messages, output)
-    f = open(fileName, 'wb')
-    f.write(bytearray(output))
-    f.close()
+    with open(fileName, 'wb') as f:
+        f.write(bytearray(output))
     
 
 if __name__ == "__main__":
@@ -462,15 +451,10 @@ if __name__ == "__main__":
     else:
         messages = ParseProto(sys.argv[1])
 
-        print json.dumps(messages, indent=4, sort_keys=True, ensure_ascii=False, encoding='utf-8')
+        messages = ParseProto(sys.argv[1])
 
-        # modify any field you like
-        #messages['01:00:embedded message']['01:00:string'] = "あなた"
-
-        # dump and reload the 'messages' json objects to ensure it being utf-8 encoded
-        f = open('tmp.json', 'wb')
-        json.dump(messages, f, indent=4, sort_keys=True, ensure_ascii=False, encoding='utf-8')
-        f.close()
+        with open('tmp.json', 'wb') as f:
+            json.dump(messages, f, indent=4, sort_keys=True, ensure_ascii=False, encoding='utf-8')
         f = codecs.open('tmp.json', 'r', 'utf-8')
         messages = json.load(f, encoding='utf-8')
         f.close()

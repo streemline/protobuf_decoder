@@ -39,8 +39,6 @@ def PromptForAddress(person):
     if type == "home":
       phone_number.type = addressbook_pb2.Person.HOME
       phone_number2.type = addressbook_pb2.Person.HOME
-    else:
-      print "Unknown phone type; leaving as default value."
 
 # Main procedure:  Reads the entire address book from a file,
 #   adds one person based on user input, then writes it back out to the same
